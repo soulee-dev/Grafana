@@ -39,7 +39,6 @@ services:
     restart: unless-stopped
     profiles: ["node"]
     pid: "host"
-    network_mode: host
     volumes:
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
