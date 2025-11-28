@@ -1,0 +1,111 @@
+services:
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    restart: unless-stopped
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+    ports:
+      - "9090:9090"
+    networks:
+      - observability
+      - app
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    networks:
+      - observability
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    restart: unless-stopped
+    profiles: ["node"]
+    pid: "host"
+    network_mode: host
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--path.rootfs=/rootfs'
+
+  mysqld-exporter:
+    image: prom/mysqld-exporter:latest
+    container_name: mysqld-exporter
+    restart: unless-stopped
+    profiles: ["mysql"]
+    environment:
+      - DATA_SOURCE_NAME=${MYSQL_EXPORTER_DSN_USER}:${MYSQL_EXPORTER_DSN_PASSWORD}@(${MYSQL_EXPORTER_MYSQL_HOST}:${MYSQL_EXPORTER_MYSQL_PORT})/
+    networks:
+      - app
+    ports:
+      - "9104:9104"
+
+  redis-exporter:
+    image: oliver006/redis_exporter:latest
+    container_name: redis-exporter
+    restart: unless-stopped
+    profiles: ["redis"]
+    command:
+      - "--redis.addr=${REDIS_EXPORTER_ADDR}"
+    networks:
+      - app
+    ports:
+      - "9121:9121"
+
+  rabbitmq-exporter:
+    image: kbudde/rabbitmq-exporter:latest
+    container_name: rabbitmq-exporter
+    restart: unless-stopped
+    profiles: ["rabbitmq"]
+    environment:
+      - RABBIT_URL=${RABBITMQ_EXPORTER_URL}
+      - RABBIT_USER=${RABBITMQ_EXPORTER_USER}
+      - RABBIT_PASSWORD=${RABBITMQ_EXPORTER_PASSWORD}
+    networks:
+      - app
+    ports:
+      - "9419:9419"
+
+  elasticsearch-exporter:
+    image: quay.io/prometheuscommunity/elasticsearch-exporter:latest
+    container_name: elasticsearch-exporter
+    restart: unless-stopped
+    profiles: ["es"]
+    command:
+      - "--es.uri=${ES_EXPORTER_URI}"
+    networks:
+      - app
+    ports:
+      - "9114:9114"
+
+volumes:
+  grafana-data:
+  prometheus-data:
+
+networks:
+  observability:
+    driver: bridge
+  app:
+    external: true
+    name: ${OBS_DOCKER_NETWORK}
